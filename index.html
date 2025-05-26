@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>リアルタイム人数カウンター</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+</head>
+<body>
+    <div id="root"></div>
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+        const { Users, Wifi, WifiOff } = lucide;
+
+        const FirebasePresenceCounter = () => {
+          const [onlineCount, setOnlineCount] = useState(0);
+          const [isConnected, setIsConnected] = useState(false);
+          const [error, setError] = useState('');
+          const [config, setConfig] = useState({
+            apiKey: '',
+            authDomain: '',
+            databaseURL: '',
+            projectId: ''
+          });
+          const [isConfigured, setIsConfigured] = useState(false);
+          
+          const database = useRef(null);
+          const presenceRef = useRef(null);
+          const userRef = useRef(null);
+
+          // Firebase設定の保存
+          const saveConfig = () => {
+            if (!config.apiKey || !config.databaseURL) {
+              setError('APIキーとDatabase URLは必須です');
+              return;
+            }
+            
+            try {
+              // Firebaseの初期化
+              if (!window.firebase) {
+                setError('Firebase SDKが読み込まれていません');
+                return;
+              }
+
+              const firebaseConfig = {
+                apiKey: config.apiKey,
+                authDomain: config.authDomain,
+                databaseURL: config.databaseURL,
+                projectId: config.projectId
+              };
+
+              if (!window.firebase.apps.length) {
+                window.firebase.initializeApp(firebaseConfig);
+              }
+
+              database.current = window.firebase.database();
+              setIsConfigured(true);
+              setError('');
+            } catch (err) {
+              setError('Firebase設定エラー: ' + err.message);
+            }
+          };
+
+          // プレゼンス機能の初期化
+          useEffect(() => {
+            if (!isConfigured || !database.current) return;
+
+            try {
+              // 接続状態の監視
+              const connectedRef = database.current.ref('.info/connected');
+              presenceRef.current = database.current.ref('presence');
+              
+              const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+              userRef.current = presenceRef.current.child(userId);
+
+              // 接続状態の変化を監視
+              connectedRef.on('value', (snapshot) => {
+                if (snapshot.val() === true) {
+                  setIsConnected(true);
+                  
+                  // ユーザーをオンラインとしてマーク
+                  userRef.current.set({
+                    online: true,
+                    timestamp: window.firebase.database.ServerValue.TIMESTAMP
+                  });
+                  
+                  // 切断時に自動削除
+                  userRef.current.onDisconnect().remove();
+                } else {
+                  setIsConnected(false);
+                }
+              });
+
+              // オンライン人数の監視
+              presenceRef.current.on('value', (snapshot) => {
+                const presence = snapshot.val();
+                if (presence) {
+                  const count = Object.keys(presence).length;
+                  setOnlineCount(count);
+                } else {
+                  setOnlineCount(0);
+                }
+              });
+
+            } catch (err) {
+              setError('接続エラー: ' + err.message);
+            }
+
+            // クリーンアップ
+            return () => {
+              if (presenceRef.current) {
+                presenceRef.current.off();
+              }
+              if (userRef.current) {
+                userRef.current.remove();
+              }
+            };
+          }, [isConfigured]);
+
+          // 設定画面
+          if (!isConfigured) {
+            return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4" },
+              React.createElement('div', { className: "max-w-md mx-auto" },
+                React.createElement('div', { className: "bg-white rounded-xl shadow-lg p-6" },
+                  React.createElement('div', { className: "text-center mb-6" },
+                    React.createElement(Users, { className: "w-12 h-12 text-blue-600 mx-auto mb-3" }),
+                    React.createElement('h1', { className: "text-2xl font-bold text-gray-800" }, "リアルタイム人数カウンター"),
+                    React.createElement('p', { className: "text-gray-600 mt-2" }, "Firebase設定を入力してください")
+                  ),
+                  React.createElement('div', { className: "space-y-4" },
+                    React.createElement('div', null,
+                      React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-1" }, "API Key *"),
+                      React.createElement('input', {
+                        type: "text",
+                        value: config.apiKey,
+                        onChange: (e) => setConfig({...config, apiKey: e.target.value}),
+                        className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent",
+                        placeholder: "your-api-key"
+                      })
+                    ),
+                    React.createElement('div', null,
+                      React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-1" }, "Database URL *"),
+                      React.createElement('input', {
+                        type: "text",
+                        value: config.databaseURL,
+                        onChange: (e) => setConfig({...config, databaseURL: e.target.value}),
+                        className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent",
+                        placeholder: "https://your-project.firebaseio.com"
+                      })
+                    ),
+                    error && React.createElement('div', { className: "bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" }, error),
+                    React.createElement('button', {
+                      onClick: saveConfig,
+                      className: "w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                    }, "接続開始")
+                  )
+                )
+              )
+            );
+          }
+
+          // メイン画面
+          return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4" },
+            React.createElement('div', { className: "max-w-2xl mx-auto" },
+              React.createElement('div', { className: "bg-white rounded-xl shadow-lg p-8" },
+                React.createElement('div', { className: "text-center" },
+                  React.createElement('div', { className: "relative inline-block" },
+                    React.createElement(Users, { className: "w-20 h-20 text-blue-600 mx-auto mb-4" }),
+                    React.createElement('div', { 
+                      className: `absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center ${isConnected ? 'bg-green-500' : 'bg-red-500'}` 
+                    },
+                      isConnected ? React.createElement(Wifi, { className: "w-3 h-3 text-white" }) : React.createElement(WifiOff, { className: "w-3 h-3 text-white" })
+                    )
+                  ),
+                  React.createElement('h1', { className: "text-3xl font-bold text-gray-800 mb-2" }, "現在の参加者数"),
+                  React.createElement('div', { className: "text-6xl font-bold text-blue-600 mb-4" }, onlineCount),
+                  React.createElement('p', { className: "text-gray-600 mb-6" }, "人がオンラインです"),
+                  React.createElement('div', { 
+                    className: `inline-flex items-center px-4 py-2 rounded-full text-sm font-medium ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}` 
+                  },
+                    isConnected ? [
+                      React.createElement(Wifi, { key: "icon", className: "w-4 h-4 mr-2" }),
+                      "接続中"
+                    ] : [
+                      React.createElement(WifiOff, { key: "icon", className: "w-4 h-4 mr-2" }),
+                      "切断中"
+                    ]
+                  ),
+                  error && React.createElement('div', { className: "mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" }, error),
+                  React.createElement('button', {
+                    onClick: () => {
+                      setIsConfigured(false);
+                      setOnlineCount(0);
+                      setIsConnected(false);
+                      setError('');
+                    },
+                    className: "mt-6 text-gray-500 hover:text-gray-700 text-sm underline"
+                  }, "設定を変更")
+                )
+              )
+            )
+          );
+        };
+
+        ReactDOM.render(React.createElement(FirebasePresenceCounter), document.getElementById('root'));
+    </script>
+</body>
+</html>
