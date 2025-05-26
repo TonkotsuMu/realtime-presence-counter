@@ -3,212 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>リアルタイム人数カウンター</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
-    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <title>動作テスト</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .icon {
+            width: 80px;
+            height: 80px;
+            background: #2196f3;
+            border-radius: 50%;
+            margin: 0 auto 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+        }
+        .count {
+            font-size: 60px;
+            font-weight: bold;
+            color: #2196f3;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px 20px;
+            border-radius: 25px;
+            display: inline-block;
+            margin: 20px 0;
+        }
+        .online { background: #e8f5e8; color: #2e7d32; }
+        .offline { background: #ffebee; color: #c62828; }
+        button {
+            background: #2196f3;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        button:hover { background: #1976d2; }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            margin: 10px 0;
+            box-sizing: border-box;
+        }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-    <div id="root"></div>
-    <script type="text/babel">
-        const { useState, useEffect, useRef } = React;
-        const { Users, Wifi, WifiOff } = lucide;
+    <div class="container">
+        <div class="icon">👥</div>
+        <h1>リアルタイム人数カウンター</h1>
+        <p id="status-text">GitHub Pages動作テスト中...</p>
+        
+        <div class="count" id="count">0</div>
+        <p>人がオンラインです</p>
+        
+        <div class="status offline" id="status">
+            ❌ 接続待機中
+        </div>
+        
+        <div id="test-section">
+            <button onclick="testConnection()">接続テスト</button>
+            <button onclick="simulateUsers()">人数シミュレート</button>
+        </div>
+        
+        <div id="firebase-section" class="hidden">
+            <h3>Firebase設定</h3>
+            <input type="text" id="apiKey" placeholder="Firebase API Key">
+            <input type="text" id="databaseURL" placeholder="Database URL">
+            <button onclick="connectFirebase()">Firebase接続</button>
+        </div>
+        
+        <button onclick="toggleFirebaseConfig()">Firebase設定を表示</button>
+        
+        <div id="log" style="margin-top: 20px; text-align: left; font-size: 12px; color: #666;">
+            <strong>ログ:</strong><br>
+            <div id="log-content">ページ読み込み完了</div>
+        </div>
+    </div>
 
-        const FirebasePresenceCounter = () => {
-          const [onlineCount, setOnlineCount] = useState(0);
-          const [isConnected, setIsConnected] = useState(false);
-          const [error, setError] = useState('');
-          const [config, setConfig] = useState({
-            apiKey: '',
-            authDomain: '',
-            databaseURL: '',
-            projectId: ''
-          });
-          const [isConfigured, setIsConfigured] = useState(false);
-          
-          const database = useRef(null);
-          const presenceRef = useRef(null);
-          const userRef = useRef(null);
+    <script>
+        let currentCount = 0;
+        let isConnected = false;
 
-          // Firebase設定の保存
-          const saveConfig = () => {
-            if (!config.apiKey || !config.databaseURL) {
-              setError('APIキーとDatabase URLは必須です');
-              return;
+        function log(message) {
+            const logContent = document.getElementById('log-content');
+            const time = new Date().toLocaleTimeString();
+            logContent.innerHTML += `<br>[${time}] ${message}`;
+            console.log(message);
+        }
+
+        function updateCount(count) {
+            currentCount = count;
+            document.getElementById('count').textContent = count;
+            log(`人数更新: ${count}人`);
+        }
+
+        function updateStatus(connected) {
+            isConnected = connected;
+            const statusEl = document.getElementById('status');
+            if (connected) {
+                statusEl.className = 'status online';
+                statusEl.textContent = '✅ 接続中';
+            } else {
+                statusEl.className = 'status offline';
+                statusEl.textContent = '❌ 切断中';
+            }
+            log(`接続状態: ${connected ? '接続中' : '切断中'}`);
+        }
+
+        function testConnection() {
+            log('接続テスト開始...');
+            updateStatus(true);
+            setTimeout(() => {
+                updateCount(Math.floor(Math.random() * 10) + 1);
+                log('接続テスト成功');
+            }, 1000);
+        }
+
+        function simulateUsers() {
+            log('ユーザーシミュレート開始');
+            let count = 0;
+            const interval = setInterval(() => {
+                count = Math.floor(Math.random() * 20) + 1;
+                updateCount(count);
+                
+                if (count > 15) {
+                    clearInterval(interval);
+                    log('シミュレート完了');
+                }
+            }, 500);
+        }
+
+        function toggleFirebaseConfig() {
+            const section = document.getElementById('firebase-section');
+            if (section.classList.contains('hidden')) {
+                section.classList.remove('hidden');
+                log('Firebase設定を表示');
+            } else {
+                section.classList.add('hidden');
+                log('Firebase設定を非表示');
+            }
+        }
+
+        function connectFirebase() {
+            const apiKey = document.getElementById('apiKey').value;
+            const databaseURL = document.getElementById('databaseURL').value;
+            
+            if (!apiKey || !databaseURL) {
+                log('❌ APIキーとDatabase URLを入力してください');
+                return;
             }
             
-            try {
-              // Firebaseの初期化
-              if (!window.firebase) {
-                setError('Firebase SDKが読み込まれていません');
-                return;
-              }
-
-              const firebaseConfig = {
-                apiKey: config.apiKey,
-                authDomain: config.authDomain,
-                databaseURL: config.databaseURL,
-                projectId: config.projectId
-              };
-
-              if (!window.firebase.apps.length) {
-                window.firebase.initializeApp(firebaseConfig);
-              }
-
-              database.current = window.firebase.database();
-              setIsConfigured(true);
-              setError('');
-            } catch (err) {
-              setError('Firebase設定エラー: ' + err.message);
+            log('Firebase接続試行中...');
+            
+            // Firebase SDKの読み込み確認
+            if (typeof firebase === 'undefined') {
+                log('❌ Firebase SDKが見つかりません。CDNから読み込み中...');
+                loadFirebase(apiKey, databaseURL);
+            } else {
+                log('✅ Firebase SDK読み込み済み');
+                initFirebase(apiKey, databaseURL);
             }
-          };
+        }
 
-          // プレゼンス機能の初期化
-          useEffect(() => {
-            if (!isConfigured || !database.current) return;
-
-            try {
-              // 接続状態の監視
-              const connectedRef = database.current.ref('.info/connected');
-              presenceRef.current = database.current.ref('presence');
-              
-              const userId = 'user_' + Math.random().toString(36).substr(2, 9);
-              userRef.current = presenceRef.current.child(userId);
-
-              // 接続状態の変化を監視
-              connectedRef.on('value', (snapshot) => {
-                if (snapshot.val() === true) {
-                  setIsConnected(true);
-                  
-                  // ユーザーをオンラインとしてマーク
-                  userRef.current.set({
-                    online: true,
-                    timestamp: window.firebase.database.ServerValue.TIMESTAMP
-                  });
-                  
-                  // 切断時に自動削除
-                  userRef.current.onDisconnect().remove();
-                } else {
-                  setIsConnected(false);
-                }
-              });
-
-              // オンライン人数の監視
-              presenceRef.current.on('value', (snapshot) => {
-                const presence = snapshot.val();
-                if (presence) {
-                  const count = Object.keys(presence).length;
-                  setOnlineCount(count);
-                } else {
-                  setOnlineCount(0);
-                }
-              });
-
-            } catch (err) {
-              setError('接続エラー: ' + err.message);
-            }
-
-            // クリーンアップ
-            return () => {
-              if (presenceRef.current) {
-                presenceRef.current.off();
-              }
-              if (userRef.current) {
-                userRef.current.remove();
-              }
+        function loadFirebase(apiKey, databaseURL) {
+            const script1 = document.createElement('script');
+            script1.src = 'https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js';
+            script1.onload = () => {
+                const script2 = document.createElement('script');
+                script2.src = 'https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js';
+                script2.onload = () => {
+                    log('✅ Firebase SDK読み込み完了');
+                    initFirebase(apiKey, databaseURL);
+                };
+                script2.onerror = () => log('❌ Firebase Database SDK読み込み失敗');
+                document.head.appendChild(script2);
             };
-          }, [isConfigured]);
+            script1.onerror = () => log('❌ Firebase App SDK読み込み失敗');
+            document.head.appendChild(script1);
+        }
 
-          // 設定画面
-          if (!isConfigured) {
-            return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4" },
-              React.createElement('div', { className: "max-w-md mx-auto" },
-                React.createElement('div', { className: "bg-white rounded-xl shadow-lg p-6" },
-                  React.createElement('div', { className: "text-center mb-6" },
-                    React.createElement(Users, { className: "w-12 h-12 text-blue-600 mx-auto mb-3" }),
-                    React.createElement('h1', { className: "text-2xl font-bold text-gray-800" }, "リアルタイム人数カウンター"),
-                    React.createElement('p', { className: "text-gray-600 mt-2" }, "Firebase設定を入力してください")
-                  ),
-                  React.createElement('div', { className: "space-y-4" },
-                    React.createElement('div', null,
-                      React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-1" }, "API Key *"),
-                      React.createElement('input', {
-                        type: "text",
-                        value: config.apiKey,
-                        onChange: (e) => setConfig({...config, apiKey: e.target.value}),
-                        className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent",
-                        placeholder: "your-api-key"
-                      })
-                    ),
-                    React.createElement('div', null,
-                      React.createElement('label', { className: "block text-sm font-medium text-gray-700 mb-1" }, "Database URL *"),
-                      React.createElement('input', {
-                        type: "text",
-                        value: config.databaseURL,
-                        onChange: (e) => setConfig({...config, databaseURL: e.target.value}),
-                        className: "w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent",
-                        placeholder: "https://your-project.firebaseio.com"
-                      })
-                    ),
-                    error && React.createElement('div', { className: "bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" }, error),
-                    React.createElement('button', {
-                      onClick: saveConfig,
-                      className: "w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                    }, "接続開始")
-                  )
-                )
-              )
-            );
-          }
+        function initFirebase(apiKey, databaseURL) {
+            try {
+                const config = { apiKey, databaseURL };
+                firebase.initializeApp(config);
+                const database = firebase.database();
+                
+                log('✅ Firebase初期化成功');
+                setupPresence(database);
+            } catch (error) {
+                log('❌ Firebase初期化エラー: ' + error.message);
+            }
+        }
 
-          // メイン画面
-          return React.createElement('div', { className: "min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4" },
-            React.createElement('div', { className: "max-w-2xl mx-auto" },
-              React.createElement('div', { className: "bg-white rounded-xl shadow-lg p-8" },
-                React.createElement('div', { className: "text-center" },
-                  React.createElement('div', { className: "relative inline-block" },
-                    React.createElement(Users, { className: "w-20 h-20 text-blue-600 mx-auto mb-4" }),
-                    React.createElement('div', { 
-                      className: `absolute -top-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center ${isConnected ? 'bg-green-500' : 'bg-red-500'}` 
-                    },
-                      isConnected ? React.createElement(Wifi, { className: "w-3 h-3 text-white" }) : React.createElement(WifiOff, { className: "w-3 h-3 text-white" })
-                    )
-                  ),
-                  React.createElement('h1', { className: "text-3xl font-bold text-gray-800 mb-2" }, "現在の参加者数"),
-                  React.createElement('div', { className: "text-6xl font-bold text-blue-600 mb-4" }, onlineCount),
-                  React.createElement('p', { className: "text-gray-600 mb-6" }, "人がオンラインです"),
-                  React.createElement('div', { 
-                    className: `inline-flex items-center px-4 py-2 rounded-full text-sm font-medium ${isConnected ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}` 
-                  },
-                    isConnected ? [
-                      React.createElement(Wifi, { key: "icon", className: "w-4 h-4 mr-2" }),
-                      "接続中"
-                    ] : [
-                      React.createElement(WifiOff, { key: "icon", className: "w-4 h-4 mr-2" }),
-                      "切断中"
-                    ]
-                  ),
-                  error && React.createElement('div', { className: "mt-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded" }, error),
-                  React.createElement('button', {
-                    onClick: () => {
-                      setIsConfigured(false);
-                      setOnlineCount(0);
-                      setIsConnected(false);
-                      setError('');
-                    },
-                    className: "mt-6 text-gray-500 hover:text-gray-700 text-sm underline"
-                  }, "設定を変更")
-                )
-              )
-            )
-          );
-        };
+        function setupPresence(database) {
+            try {
+                const presenceRef = database.ref('presence');
+                const userId = 'user_' + Math.random().toString(36).substr(2, 9);
+                const userRef = presenceRef.child(userId);
+                
+                // 接続状態監視
+                database.ref('.info/connected').on('value', (snapshot) => {
+                    if (snapshot.val() === true) {
+                        updateStatus(true);
+                        userRef.set({
+                            online: true,
+                            timestamp: firebase.database.ServerValue.TIMESTAMP
+                        });
+                        userRef.onDisconnect().remove();
+                        log('✅ Firebase接続成功');
+                    } else {
+                        updateStatus(false);
+                        log('❌ Firebase接続失敗');
+                    }
+                });
+                
+                // 人数監視
+                presenceRef.on('value', (snapshot) => {
+                    const presence = snapshot.val();
+                    const count = presence ? Object.keys(presence).length : 0;
+                    updateCount(count);
+                });
+                
+            } catch (error) {
+                log('❌ プレゼンス設定エラー: ' + error.message);
+            }
+        }
 
-        ReactDOM.render(React.createElement(FirebasePresenceCounter), document.getElementById('root'));
+        // 初期化
+        window.addEventListener('load', () => {
+            log('ページ読み込み完了');
+            document.getElementById('status-text').textContent = 'GitHub Pages デプロイ成功！';
+        });
+
+        window.addEventListener('error', (event) => {
+            log('❌ JavaScript エラー: ' + event.error.message);
+        });
     </script>
 </body>
 </html>
